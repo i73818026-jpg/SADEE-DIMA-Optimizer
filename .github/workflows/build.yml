@@ -14,28 +14,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Setup Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/build-tools/35.0.0" >> $GITHUB_PATH
 
-      - name: Accept Android licenses
-        run: yes | sdkmanager --licenses || true
+      - name: Accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses || true
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Build APK
+        run: |
+          gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SADEE-DIMA-Optimizer-APK
+          name: SADEE-DIMA-Optimizer
           path: app/build/outputs/apk/debug/app-debug.apk
