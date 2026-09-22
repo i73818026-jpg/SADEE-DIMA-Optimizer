@@ -13,6 +13,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,31 +27,40 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle 8.7
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK
+      - name: Prepare Android SDK
+        shell: bash
         run: |
+          set -e
+
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/emulator:$PATH"
+
+          yes | sdkmanager --licenses >/dev/null || true
+
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
       - name: Check project
         run: |
-          echo "=== Project files ==="
+          echo "=== ROOT ==="
           ls -la
-          echo "=== App files ==="
+
+          echo "=== APP ==="
           ls -la app
+
+          echo "=== Required files ==="
           test -f settings.gradle
           test -f build.gradle
           test -f app/build.gradle
 
-      - name: Build APK
+          echo "Project structure OK"
+
+      - name: Build Debug APK
         run: |
           gradle :app:assembleDebug --stacktrace
 
