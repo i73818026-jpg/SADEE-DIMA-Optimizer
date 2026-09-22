@@ -1,4 +1,4 @@
-name: Build SADEE DIMA Apps
+name: Build Android APK
 
 on:
   workflow_dispatch:
@@ -6,305 +6,40 @@ on:
     branches:
       - main
 
-permissions:
-  contents: read
-
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-
-      # ==========================================
-      # 1. CHECKOUT REPOSITORY
-      # ==========================================
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-
-      # ==========================================
-      # 2. FIND PROJECT ZIP
-      # ==========================================
-      - name: Find Project ZIP
-        shell: bash
-        run: |
-          set -e
-
-          echo "======================================"
-          echo " SEARCHING FOR SADEE DIMA PROJECT ZIP "
-          echo "======================================"
-
-          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
-
-          if [ -z "$ZIP_FILE" ]; then
-            echo ""
-            echo "❌ ERROR: No ZIP file found!"
-            echo ""
-            echo "Upload your SADEE-DIMA-Optimizer ZIP"
-            echo "to the repository root."
-            exit 1
-          fi
-
-          echo ""
-          echo "✅ ZIP FOUND:"
-          echo "$ZIP_FILE"
-          echo ""
-
-          echo "ZIP_FILE=$ZIP_FILE" >> "$GITHUB_ENV"
-
-
-      # ==========================================
-      # 3. EXTRACT ZIP
-      # ==========================================
-      - name: Extract Project ZIP
-        shell: bash
-        run: |
-          set -e
-
-          echo "======================================"
-          echo " EXTRACTING PROJECT "
-          echo "======================================"
-
-          rm -rf extracted
-          mkdir -p extracted
-
-          unzip -o "$ZIP_FILE" -d extracted
-
-          echo ""
-          echo "✅ ZIP extracted successfully."
-          echo ""
-
-          echo "Project files:"
-          find extracted -maxdepth 5 -type f | sort
-
-
-      # ==========================================
-      # 4. FIND GRADLE PROJECT
-      # ==========================================
-      - name: Locate Gradle Project
-        shell: bash
-        run: |
-          set -e
-
-          echo "======================================"
-          echo " LOCATING GRADLE PROJECT "
-          echo "======================================"
-
-          SETTINGS=$(find extracted \
-            -type f \
-            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
-            | head -n 1)
-
-          if [ -z "$SETTINGS" ]; then
-            echo ""
-            echo "❌ ERROR: settings.gradle not found!"
-            echo ""
-            echo "Your ZIP must contain a Gradle Android project."
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$SETTINGS")
-
-          echo ""
-          echo "✅ Gradle project found:"
-          echo "$PROJECT_DIR"
-          echo ""
-
-          if [ ! -f "$PROJECT_DIR/build.gradle" ] && \
-             [ ! -f "$PROJECT_DIR/build.gradle.kts" ]; then
-            echo "❌ ERROR: Root build.gradle not found!"
-            exit 1
-          fi
-
-          if [ ! -d "$PROJECT_DIR/userApp" ]; then
-            echo "❌ ERROR: userApp folder not found!"
-            exit 1
-          fi
-
-          if [ ! -d "$PROJECT_DIR/adminApp" ]; then
-            echo "❌ ERROR: adminApp folder not found!"
-            exit 1
-          fi
-
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-          echo ""
-          echo "======================================"
-          echo " PROJECT STRUCTURE OK "
-          echo "======================================"
-
-
-      # ==========================================
-      # 5. JAVA 17
-      # ==========================================
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
-          cache: gradle
+          java-version: '17'
 
-
-      # ==========================================
-      # 6. GRADLE
-      # ==========================================
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.7"
-
-
-      # ==========================================
-      # 7. ANDROID SDK
-      # ==========================================
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-
-      # ==========================================
-      # 8. INSTALL ANDROID SDK PACKAGES
-      # ==========================================
-      - name: Install Android SDK Packages
-        shell: bash
+      - name: Accept Android licenses
         run: |
-          set -e
-
-          echo "======================================"
-          echo " INSTALLING ANDROID SDK "
-          echo "======================================"
-
           yes | sdkmanager --licenses || true
 
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
-
-          echo ""
-          echo "✅ Android SDK ready."
-
-
-      # ==========================================
-      # 9. SHOW GRADLE VERSION
-      # ==========================================
-      - name: Check Gradle
-        working-directory: ${{ env.PROJECT_DIR }}
+      - name: Make gradlew executable
         run: |
-          echo "======================================"
-          echo " GRADLE INFORMATION "
-          echo "======================================"
+          chmod +x ./gradlew
 
-          gradle --version
-
-
-      # ==========================================
-      # 10. CLEAN PROJECT
-      # ==========================================
-      - name: Clean Project
-        working-directory: ${{ env.PROJECT_DIR }}
+      - name: Build APK
         run: |
-          echo "======================================"
-          echo " CLEANING PROJECT "
-          echo "======================================"
+          ./gradlew assembleDebug --stacktrace
 
-          gradle --no-daemon clean
-
-
-      # ==========================================
-      # 11. BUILD USER APK
-      # ==========================================
-      - name: Build User APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo " BUILDING USER APK "
-          echo "======================================"
-
-          gradle \
-            --no-daemon \
-            --stacktrace \
-            :userApp:assembleDebug
-
-          echo ""
-          echo "✅ USER APK BUILD COMPLETE"
-
-
-      # ==========================================
-      # 12. BUILD ADMIN APK
-      # ==========================================
-      - name: Build Admin APK
-        working-directory: ${{ env.PROJECT_DIR }}
-        run: |
-          echo "======================================"
-          echo " BUILDING ADMIN APK "
-          echo "======================================"
-
-          gradle \
-            --no-daemon \
-            --stacktrace \
-            :adminApp:assembleDebug
-
-          echo ""
-          echo "✅ ADMIN APK BUILD COMPLETE"
-
-
-      # ==========================================
-      # 13. SHOW APK FILES
-      # ==========================================
-      - name: Show APK Files
-        shell: bash
-        run: |
-          echo "======================================"
-          echo " GENERATED APK FILES "
-          echo "======================================"
-
-          find "$PROJECT_DIR" \
-            -type f \
-            -name "*.apk" \
-            -print
-
-          echo ""
-          echo "======================================"
-          echo " APK BUILD FINISHED "
-          echo "======================================"
-
-
-      # ==========================================
-      # 14. UPLOAD USER APK
-      # ==========================================
-      - name: Upload User APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: SADEE-DIMA-USER-APK
-          path: "${{ env.PROJECT_DIR }}/userApp/build/outputs/apk/debug/*.apk"
-          if-no-files-found: error
-
-
-      # ==========================================
-      # 15. UPLOAD ADMIN APK
-      # ==========================================
-      - name: Upload Admin APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: SADEE-DIMA-ADMIN-APK
-          path: "${{ env.PROJECT_DIR }}/adminApp/build/outputs/apk/debug/*.apk"
-          if-no-files-found: error
-
-
-      # ==========================================
-      # 16. BUILD SUMMARY
-      # ==========================================
-      - name: Build Summary
-        shell: bash
-        run: |
-          echo ""
-          echo "╔══════════════════════════════════════╗"
-          echo "║     SADEE × DIMA OPTIMIZER          ║"
-          echo "║          BUILD SUCCESS              ║"
-          echo "╚══════════════════════════════════════╝"
-          echo ""
-          echo "✅ User APK  → SADEE-DIMA-USER-APK"
-          echo "✅ Admin APK → SADEE-DIMA-ADMIN-APK"
-          echo ""
-          echo "Download them from:"
-          echo "GitHub → Actions → This Run → Artifacts"
+          name: SADEE-APK
+          path: |
+            app/build/outputs/apk/debug/*.apk
