@@ -32,23 +32,24 @@ jobs:
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/build-tools/35.0.0" >> $GITHUB_PATH
 
-      - name: Accept Android SDK licenses
+      - name: Install Android SDK
         run: |
-          yes | sdkmanager --licenses || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Install Android SDK packages
+      - name: Find Gradle project
         run: |
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          echo "Searching for settings.gradle..."
+          find . -name "settings.gradle" -o -name "settings.gradle.kts"
 
       - name: Build APK
         run: |
+          PROJECT_DIR=$(dirname "$(find . -name 'settings.gradle' -o -name 'settings.gradle.kts' | head -1)")
+          echo "Gradle project: $PROJECT_DIR"
+          cd "$PROJECT_DIR"
           gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SADEE-DIMA-Optimizer
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: "**/app/build/outputs/apk/debug/app-debug.apk"
